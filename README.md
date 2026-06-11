@@ -10,7 +10,7 @@ TermuxDesk captures an existing X11 display with Pillow, streams JPEG frames
 through an aiohttp WebSocket, and injects mouse and keyboard events with the
 XTest extension through python-xlib. It does not need root or `sudo`.
 
-> **Project status:** `0.1.0` is an alpha release. Test it with your desktop and
+> **Project status:** `0.1.3` is an alpha release. Test it with your desktop and
 > window manager before relying on it.
 
 ## Screenshot
@@ -75,7 +75,7 @@ To create a temporary HTTPS URL:
 termux-desk start --tunnel
 ```
 
-**Security warning:** TermuxDesk `0.1.0` has no built-in authentication. Anyone
+**Security warning:** TermuxDesk `0.1.3` has no built-in authentication. Anyone
 who can reach the URL can view and control the X11 session. A Cloudflare Quick
 Tunnel URL is public. Share it only with trusted people, stop it after use, and
 prefer Cloudflare Access or another authenticated proxy for ongoing access.
