@@ -46,7 +46,7 @@ python -m pip install .
 Termux one-liner:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YBeeTeam/termux-desk/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/amirghm/termux-desk/main/install.sh | bash
 ```
 
 The installer must run in Termux itself, not inside a Debian/Ubuntu PRoot. This
