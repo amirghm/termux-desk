@@ -7,6 +7,7 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -18,50 +19,89 @@ VIEWER_HTML = r"""<!doctype html>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>TermuxDesk</title>
   <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; --bar: #1f2937; --panel: #1f2937f2;
+      --button: #374151; --border: #4b5563; --text: #f9fafb; --muted: #9ca3af; --stage: #030712; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #111827; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--stage); color: var(--text); }
     body { display: grid; grid-template-rows: auto 1fr; }
-    header { display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem; background: #1f2937; }
-    strong { margin-right: auto; }
-    button { border: 1px solid #4b5563; border-radius: .4rem; padding: .45rem .65rem; color: #f9fafb; background: #374151; }
+    header { display: flex; align-items: center; gap: .65rem; padding: .55rem .7rem; background: var(--bar);
+      border-bottom: 1px solid var(--border); box-shadow: 0 .15rem .75rem #0004; z-index: 2; }
+    strong { white-space: nowrap; }
+    .toolbar { display: flex; align-items: center; gap: .35rem; margin-left: auto; }
+    .group { display: flex; gap: .3rem; }
+    .divider { width: 1px; height: 1.5rem; margin: 0 .15rem; background: var(--border); }
+    button { border: 1px solid var(--border); border-radius: .45rem; padding: .43rem .62rem; color: var(--text);
+      background: var(--button); cursor: pointer; font: inherit; white-space: nowrap; }
+    button:hover { filter: brightness(1.12); }
     button.active { border-color: #60a5fa; background: #1d4ed8; }
-    #status { width: .65rem; height: .65rem; border-radius: 50%; background: #ef4444; }
-    #stage { display: grid; place-items: center; min-height: 0; background: #030712; touch-action: none; }
+    .metrics { display: flex; align-items: center; gap: .45rem; color: var(--muted); font-size: .8rem; white-space: nowrap; }
+    #status { width: .65rem; height: .65rem; border-radius: 50%; background: #ef4444; box-shadow: 0 0 .45rem currentColor; }
+    #stage { display: grid; place-items: center; min-height: 0; background: var(--stage); touch-action: none; }
     #screen { display: block; max-width: 100%; max-height: 100%; user-select: none; -webkit-user-drag: none; }
     #help { position: fixed; inset: 4rem 1rem auto auto; width: min(25rem, calc(100% - 2rem)); padding: 1rem;
-      border: 1px solid #4b5563; border-radius: .6rem; background: #1f2937ee; box-shadow: 0 .5rem 2rem #0008; }
+      border: 1px solid var(--border); border-radius: .75rem; background: var(--panel); box-shadow: 0 .5rem 2rem #0008; z-index: 3; }
     #help[hidden] { display: none; }
-    #help h2 { margin-top: 0; font-size: 1.1rem; }
-    #help li { margin: .4rem 0; }
+    #help h2 { margin: 0 0 .8rem; font-size: 1.1rem; }
+    #help dl { display: grid; grid-template-columns: auto 1fr; gap: .65rem .9rem; margin: 0; }
+    #help dt { font-weight: 700; white-space: nowrap; }
+    #help dd { margin: 0; color: var(--muted); }
+    #notice { position: fixed; left: 50%; bottom: 1rem; translate: -50% 0; padding: .55rem .8rem;
+      border: 1px solid var(--border); border-radius: .5rem; background: var(--panel); box-shadow: 0 .3rem 1rem #0007; z-index: 4; }
+    #notice[hidden] { display: none; }
     kbd { padding: .1rem .3rem; border: 1px solid #6b7280; border-radius: .2rem; background: #111827; }
+    @media (max-width: 48rem) {
+      header { gap: .4rem; }
+      strong { display: none; }
+      .toolbar { margin-left: 0; flex: 1; }
+      button { padding: .42rem .5rem; }
+      .metrics { margin-left: auto; }
+      .statusText { display: none; }
+    }
+    @media (max-width: 34rem) {
+      button { font-size: 0; }
+      button::first-letter { font-size: 1rem; }
+      .divider { margin: 0; }
+      #fps { display: none; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <strong>TermuxDesk</strong><span id="status" title="Disconnected"></span>
-    <button id="clickMode" class="active">Click</button><button id="dragMode">Drag</button><button id="helpButton">Help</button>
+    <strong>TermuxDesk</strong>
+    <nav class="toolbar" aria-label="Viewer controls">
+      <span class="group"><button id="clickMode" class="active">🖱️ Click</button><button id="dragMode">✋ Drag</button></span>
+      <span class="divider" aria-hidden="true"></span>
+      <span class="group"><button id="copyButton">📋 Copy</button><button id="pasteButton">📝 Paste</button></span>
+      <span class="divider" aria-hidden="true"></span>
+      <button id="helpButton">❓ Help</button>
+    </nav>
+    <span class="metrics"><span id="status" title="Disconnected"></span><span class="statusText">Disconnected</span><span id="fps">0 FPS</span></span>
   </header>
   <main id="stage"><img id="screen" alt="Remote desktop"></main>
   <aside id="help" hidden>
     <h2>Controls</h2>
-    <ul>
-      <li><b>Click mode:</b> tap or click to press the primary mouse button.</li>
-      <li><b>Drag mode:</b> press, move, and release to drag.</li>
-      <li>Move the pointer with a mouse; double-click works normally.</li>
-      <li>Use a wheel or two-finger trackpad gesture to scroll.</li>
-      <li>Click the desktop, then type. Browser-reserved shortcuts may stay local.</li>
-      <li>Press <kbd>Esc</kbd> to close this panel.</li>
-    </ul>
+    <dl>
+      <dt>🖱️ Click</dt><dd>Tap or press to click immediately. Press twice quickly to double-click.</dd>
+      <dt>✋ Drag</dt><dd>Press, move, and release to drag with the primary button.</dd>
+      <dt>📋 Copy</dt><dd>Read the X11 clipboard into your browser clipboard.</dd>
+      <dt>📝 Paste</dt><dd>Send browser clipboard text to the X11 clipboard. <kbd>Ctrl</kbd>+<kbd>V</kbd> also works.</dd>
+      <dt>Keyboard</dt><dd>Type while this page is focused. Browser-reserved shortcuts may stay local.</dd>
+      <dt>Close</dt><dd>Press <kbd>Esc</kbd> to close this panel.</dd>
+    </dl>
   </aside>
+  <div id="notice" hidden role="status"></div>
 <script>
 (() => {
   const image = document.querySelector("#screen");
   const status = document.querySelector("#status");
+  const statusText = document.querySelector(".statusText");
+  const fps = document.querySelector("#fps");
   const help = document.querySelector("#help");
+  const notice = document.querySelector("#notice");
   const clickButton = document.querySelector("#clickMode");
   const dragButton = document.querySelector("#dragMode");
-  let ws, frameUrl, clickTimer, lastClick = 0, lastPoint = null;
+  let ws, frameUrl, noticeTimer, lastClick = 0, lastPoint = null;
+  let frameCount = 0, fpsStarted = performance.now();
   let mode = "click", dragging = false, reconnectDelay = 500;
 
   function send(type, data = {}) {
@@ -74,22 +114,52 @@ VIEWER_HTML = r"""<!doctype html>
       y: Math.max(0, Math.min(1, (event.clientY - r.top) / r.height))
     };
   }
+  function showNotice(message) {
+    notice.textContent = message; notice.hidden = false;
+    clearTimeout(noticeTimer); noticeTimer = setTimeout(() => notice.hidden = true, 3000);
+  }
+  async function pasteClipboard(text) {
+    try {
+      const value = text === undefined ? await navigator.clipboard.readText() : text;
+      send("clipboard", {text: value}); showNotice("Clipboard sent");
+    } catch (error) {
+      showNotice("Clipboard access was denied");
+    }
+  }
   function connect() {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${scheme}://${location.host}/ws`);
     ws.binaryType = "blob";
     ws.onopen = () => {
-      status.style.background = "#22c55e"; status.title = "Connected"; reconnectDelay = 500;
+      status.style.background = "#22c55e"; status.title = "Connected"; statusText.textContent = "Connected"; reconnectDelay = 500;
     };
     ws.onmessage = event => {
-      if (!(event.data instanceof Blob)) return;
+      if (!(event.data instanceof Blob)) {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === "clipboard") {
+            navigator.clipboard.writeText(message.text).then(
+              () => showNotice("Clipboard copied"),
+              () => showNotice("Clipboard received, but browser access was denied")
+            );
+          } else if (message.type === "error") showNotice(message.message);
+        } catch (error) {}
+        return;
+      }
       if (frameUrl) URL.revokeObjectURL(frameUrl);
       frameUrl = URL.createObjectURL(event.data);
-      image.onload = () => send("ready");
+      image.onload = () => {
+        send("ready"); frameCount++;
+        const now = performance.now();
+        if (now - fpsStarted >= 1000) {
+          fps.textContent = `${Math.round(frameCount * 1000 / (now - fpsStarted))} FPS`;
+          frameCount = 0; fpsStarted = now;
+        }
+      };
       image.src = frameUrl;
     };
     ws.onclose = () => {
-      status.style.background = "#ef4444"; status.title = "Disconnected";
+      status.style.background = "#ef4444"; status.title = "Disconnected"; statusText.textContent = "Disconnected"; fps.textContent = "0 FPS";
       setTimeout(connect, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 5000);
     };
   }
@@ -100,32 +170,35 @@ VIEWER_HTML = r"""<!doctype html>
   }
   clickButton.onclick = () => setMode("click");
   dragButton.onclick = () => setMode("drag");
+  document.querySelector("#copyButton").onclick = () => send("copy_request");
+  document.querySelector("#pasteButton").onclick = () => pasteClipboard();
   document.querySelector("#helpButton").onclick = () => help.hidden = !help.hidden;
 
   image.addEventListener("contextmenu", event => event.preventDefault());
   image.addEventListener("pointerdown", event => {
     event.preventDefault(); image.focus(); image.setPointerCapture(event.pointerId);
     const p = point(event);
-    if (mode === "drag") { dragging = true; send("button", {...p, button: 1, down: true}); }
-    else if (event.button !== 0) send("click", {...p, button: event.button + 1});
+    if (mode === "drag" && event.button === 0) {
+      dragging = true; send("button", {...p, button: 1, down: true});
+    } else if (mode === "click" && event.button === 0) {
+      const now = performance.now();
+      const nearby = lastPoint && Math.abs(lastPoint.x - p.x) < .02 && Math.abs(lastPoint.y - p.y) < .02;
+      if (nearby && now - lastClick < 300) {
+        send("dblclick", {...p, button: 1}); lastClick = 0; lastPoint = null;
+      } else {
+        send("click", {...p, button: 1}); lastClick = now; lastPoint = p;
+      }
+    } else if (mode === "click") send("click", {...p, button: event.button + 1});
   });
   image.addEventListener("pointermove", event => {
     if (event.pointerType === "mouse" || dragging) send("move", point(event));
   });
-  image.addEventListener("pointerup", event => {
+  function releaseDrag(event) {
     event.preventDefault(); const p = point(event);
-    if (mode === "drag" && dragging) { send("button", {...p, button: 1, down: false}); dragging = false; }
-    else if (event.button === 0) {
-      const now = performance.now();
-      const nearby = lastPoint && Math.abs(lastPoint.x - p.x) < .02 && Math.abs(lastPoint.y - p.y) < .02;
-      if (nearby && now - lastClick < 300) {
-        clearTimeout(clickTimer); send("dblclick", {...p, button: 1}); lastClick = 0; lastPoint = null;
-      } else {
-        lastClick = now; lastPoint = p;
-        clickTimer = setTimeout(() => { send("click", {...p, button: 1}); lastClick = 0; lastPoint = null; }, 300);
-      }
-    }
-  });
+    if (dragging) { send("button", {...p, button: 1, down: false}); dragging = false; }
+  }
+  image.addEventListener("pointerup", releaseDrag);
+  image.addEventListener("pointercancel", releaseDrag);
   image.addEventListener("dblclick", event => event.preventDefault());
   image.addEventListener("wheel", event => {
     event.preventDefault();
@@ -134,6 +207,7 @@ VIEWER_HTML = r"""<!doctype html>
 
   window.addEventListener("keydown", event => {
     if (!help.hidden && event.key === "Escape") { help.hidden = true; return; }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") return;
     if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
       send("char", {char: event.key});
     } else {
@@ -143,10 +217,17 @@ VIEWER_HTML = r"""<!doctype html>
     if (!["F5", "F11", "F12"].includes(event.key)) event.preventDefault();
   });
   window.addEventListener("keyup", event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") return;
     if (event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) {
       send("key", {key: event.key, down: false, ctrl: event.ctrlKey, alt: event.altKey,
         shift: event.shiftKey, meta: event.metaKey});
       event.preventDefault();
+    }
+  });
+  document.addEventListener("paste", event => {
+    const text = event.clipboardData && event.clipboardData.getData("text");
+    if (text !== null && text !== undefined) {
+      event.preventDefault(); pasteClipboard(text);
     }
   });
   connect();
@@ -310,7 +391,7 @@ class TermuxDeskServer:
         try:
             async for message in ws:
                 if message.type == runtime.ws_message_type.TEXT:
-                    await self._handle_input(message.data)
+                    await self._handle_input(message.data, ws)
                 elif message.type == runtime.ws_message_type.ERROR:
                     break
         finally:
@@ -342,10 +423,13 @@ class TermuxDeskServer:
         image.save(output, "JPEG", quality=self.quality, optimize=True)
         return output.getvalue()
 
-    async def _handle_input(self, raw_message: str) -> None:
+    async def _handle_input(self, raw_message: str, ws: Any = None) -> None:
         try:
             event = json.loads(raw_message)
             if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+                return
+            if event["type"] in {"clipboard", "copy_request"}:
+                await self._handle_clipboard(event, ws)
                 return
             if self._x_lock is None:
                 return
@@ -353,6 +437,64 @@ class TermuxDeskServer:
                 self._inject_event(event)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return
+
+    async def _handle_clipboard(self, event: dict[str, Any], ws: Any) -> None:
+        try:
+            if event["type"] == "clipboard":
+                text = event.get("text")
+                if not isinstance(text, str):
+                    return
+                await asyncio.to_thread(self._set_clipboard, text)
+            else:
+                text = await asyncio.to_thread(self._get_clipboard)
+                if ws is not None and not ws.closed:
+                    await ws.send_str(json.dumps({"type": "clipboard", "text": text}))
+        except (OSError, subprocess.SubprocessError) as exc:
+            if ws is not None and not ws.closed:
+                await ws.send_str(json.dumps({
+                    "type": "error",
+                    "message": f"Clipboard unavailable: {exc}",
+                }))
+
+    def _run_clipboard(self, cmd: list[str], text: Optional[str] = None) -> str:
+        env = os.environ.copy()
+        if self.display_name:
+            env["DISPLAY"] = self.display_name
+        result = subprocess.run(
+            cmd,
+            input=text,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=True,
+            env=env,
+        )
+        return result.stdout
+
+    def _set_clipboard(self, text: str) -> None:
+        errors = []
+        for cmd in (
+            ["xclip", "-selection", "clipboard", "-filter"],
+            ["xsel", "--clipboard", "--input"],
+        ):
+            try:
+                self._run_clipboard(cmd, text)
+                return
+            except (FileNotFoundError, subprocess.SubprocessError) as exc:
+                errors.append(f"{cmd[0]}: {exc}")
+        raise OSError("; ".join(errors))
+
+    def _get_clipboard(self) -> str:
+        errors = []
+        for cmd in (
+            ["xclip", "-selection", "clipboard", "-o"],
+            ["xsel", "--clipboard", "--output"],
+        ):
+            try:
+                return self._run_clipboard(cmd)
+            except (FileNotFoundError, subprocess.SubprocessError) as exc:
+                errors.append(f"{cmd[0]}: {exc}")
+        raise OSError("; ".join(errors))
 
     def _point(self, event: dict[str, Any]) -> tuple[int, int]:
         x = min(1.0, max(0.0, float(event["x"])))
@@ -373,10 +515,8 @@ class TermuxDeskServer:
             return
         if event_type in {"click", "dblclick"}:
             button = self._button(event.get("button", 1))
-            count = 2 if event_type == "dblclick" else 1
-            for _ in range(count):
-                self._mouse_button(button, True)
-                self._mouse_button(button, False)
+            self._mouse_button(button, True)
+            self._mouse_button(button, False)
         elif event_type == "button":
             self._mouse_button(self._button(event.get("button", 1)), bool(event["down"]))
         elif event_type == "scroll":

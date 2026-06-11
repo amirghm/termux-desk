@@ -84,9 +84,13 @@ prefer Cloudflare Access or another authenticated proxy for ongoing access.
 
 ## Browser Controls
 
-- **Click mode** sends primary clicks on tap or mouse release.
+- **Click mode** sends primary clicks immediately on press and detects quick
+  second presses as double-clicks.
 - **Drag mode** holds the primary button while the pointer moves.
 - Mouse movement, double-click, wheel, and horizontal scroll are supported.
+- **Copy** reads the X11 clipboard into the browser clipboard; **Paste** and
+  browser paste events send text to the X11 clipboard. Install `xclip` or
+  `xsel` in the environment running TermuxDesk to enable clipboard support.
 - Keyboard events are sent while the viewer page has focus.
 - The Help button shows the controls in the viewer.
 

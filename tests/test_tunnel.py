@@ -1,6 +1,6 @@
 import unittest
 
-from termuxdesk.tunnel import _TUNNEL_URL
+from termux_desk.tunnel import _TUNNEL_URL
 
 
 class TunnelTests(unittest.TestCase):

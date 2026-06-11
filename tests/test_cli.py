@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from termuxdesk.cli import build_parser, main
+from termux_desk.cli import build_parser, main
 
 
 class CliTests(unittest.TestCase):
