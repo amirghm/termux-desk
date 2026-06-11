@@ -13,11 +13,9 @@ XTest extension through python-xlib. It does not need root or `sudo`.
 > **Project status:** `0.1.0` is an alpha release. Test it with your desktop and
 > window manager before relying on it.
 
-## Demo
+## Screenshot
 
-<!-- Replace this placeholder with a repository screenshot or recording. -->
-
-![TermuxDesk browser viewer demo](https://placehold.co/1200x675/111827/f9fafb?text=TermuxDesk+Demo)
+![TermuxDesk remote desktop in browser](https://raw.githubusercontent.com/amirghm/termux-desk/main/docs/screenshot.jpg)
 
 ## Requirements
 
