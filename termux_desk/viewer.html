@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>TermuxDesk</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #111827; }
+    body { display: grid; grid-template-rows: auto 1fr; }
+    header { display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem; background: #1f2937; }
+    strong { margin-right: auto; }
+    button { border: 1px solid #4b5563; border-radius: .4rem; padding: .45rem .65rem; color: #f9fafb; background: #374151; }
+    button.active { border-color: #60a5fa; background: #1d4ed8; }
+    #status { width: .65rem; height: .65rem; border-radius: 50%; background: #ef4444; }
+    #stage { display: grid; place-items: center; min-height: 0; background: #030712; touch-action: none; }
+    #screen { display: block; max-width: 100%; max-height: 100%; user-select: none; -webkit-user-drag: none; }
+    #help { position: fixed; inset: 4rem 1rem auto auto; width: min(25rem, calc(100% - 2rem)); padding: 1rem;
+      border: 1px solid #4b5563; border-radius: .6rem; background: #1f2937ee; box-shadow: 0 .5rem 2rem #0008; }
+    #help[hidden] { display: none; }
+    #help h2 { margin-top: 0; font-size: 1.1rem; }
+    #help li { margin: .4rem 0; }
+    kbd { padding: .1rem .3rem; border: 1px solid #6b7280; border-radius: .2rem; background: #111827; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>TermuxDesk</strong><span id="status" title="Disconnected"></span>
+    <button id="clickMode" class="active">Click</button><button id="dragMode">Drag</button><button id="helpButton">Help</button>
+  </header>
+  <main id="stage"><img id="screen" alt="Remote desktop"></main>
+  <aside id="help" hidden>
+    <h2>Controls</h2>
+    <ul>
+      <li><b>Click mode:</b> tap or click to press the primary mouse button.</li>
+      <li><b>Drag mode:</b> press, move, and release to drag.</li>
+      <li>Move the pointer with a mouse; double-click works normally.</li>
+      <li>Use a wheel or two-finger trackpad gesture to scroll.</li>
+      <li>Click the desktop, then type. Browser-reserved shortcuts may stay local.</li>
+      <li>Press <kbd>Esc</kbd> to close this panel.</li>
+    </ul>
+  </aside>
+<script>
+(() => {
+  const image = document.querySelector("#screen");
+  const status = document.querySelector("#status");
+  const help = document.querySelector("#help");
+  const clickButton = document.querySelector("#clickMode");
+  const dragButton = document.querySelector("#dragMode");
+  let ws, frameUrl, clickTimer, lastClick = 0, lastPoint = null;
+  let mode = "click", dragging = false, reconnectDelay = 500;
+
+  function send(type, data = {}) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type, ...data}));
+  }
+  function point(event) {
+    const r = image.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(1, (event.clientX - r.left) / r.width)),
+      y: Math.max(0, Math.min(1, (event.clientY - r.top) / r.height))
+    };
+  }
+  function connect() {
+    const scheme = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${scheme}://${location.host}/ws`);
+    ws.binaryType = "blob";
+    ws.onopen = () => {
+      status.style.background = "#22c55e"; status.title = "Connected"; reconnectDelay = 500;
+    };
+    ws.onmessage = event => {
+      if (!(event.data instanceof Blob)) return;
+      if (frameUrl) URL.revokeObjectURL(frameUrl);
+      frameUrl = URL.createObjectURL(event.data);
+      image.onload = () => send("ready");
+      image.src = frameUrl;
+    };
+    ws.onclose = () => {
+      status.style.background = "#ef4444"; status.title = "Disconnected";
+      setTimeout(connect, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 5000);
+    };
+  }
+  function setMode(next) {
+    mode = next;
+    clickButton.classList.toggle("active", mode === "click");
+    dragButton.classList.toggle("active", mode === "drag");
+  }
+  clickButton.onclick = () => setMode("click");
+  dragButton.onclick = () => setMode("drag");
+  document.querySelector("#helpButton").onclick = () => help.hidden = !help.hidden;
+
+  image.addEventListener("contextmenu", event => event.preventDefault());
+  image.addEventListener("pointerdown", event => {
+    event.preventDefault(); image.focus(); image.setPointerCapture(event.pointerId);
+    const p = point(event);
+    if (mode === "drag") { dragging = true; send("button", {...p, button: 1, down: true}); }
+    else if (event.button !== 0) send("click", {...p, button: event.button + 1});
+  });
+  image.addEventListener("pointermove", event => {
+    if (event.pointerType === "mouse" || dragging) send("move", point(event));
+  });
+  image.addEventListener("pointerup", event => {
+    event.preventDefault(); const p = point(event);
+    if (mode === "drag" && dragging) { send("button", {...p, button: 1, down: false}); dragging = false; }
+    else if (event.button === 0) {
+      const now = performance.now();
+      const nearby = lastPoint && Math.abs(lastPoint.x - p.x) < .02 && Math.abs(lastPoint.y - p.y) < .02;
+      if (nearby && now - lastClick < 300) {
+        clearTimeout(clickTimer); send("dblclick", {...p, button: 1}); lastClick = 0; lastPoint = null;
+      } else {
+        lastClick = now; lastPoint = p;
+        clickTimer = setTimeout(() => { send("click", {...p, button: 1}); lastClick = 0; lastPoint = null; }, 300);
+      }
+    }
+  });
+  image.addEventListener("dblclick", event => event.preventDefault());
+  image.addEventListener("wheel", event => {
+    event.preventDefault();
+    send("scroll", {...point(event), dx: Math.sign(event.deltaX), dy: Math.sign(event.deltaY)});
+  }, {passive: false});
+
+  window.addEventListener("keydown", event => {
+    if (!help.hidden && event.key === "Escape") { help.hidden = true; return; }
+    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      send("char", {char: event.key});
+    } else {
+      send("key", {key: event.key, down: true, ctrl: event.ctrlKey, alt: event.altKey,
+        shift: event.shiftKey, meta: event.metaKey});
+    }
+    if (!["F5", "F11", "F12"].includes(event.key)) event.preventDefault();
+  });
+  window.addEventListener("keyup", event => {
+    if (event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) {
+      send("key", {key: event.key, down: false, ctrl: event.ctrlKey, alt: event.altKey,
+        shift: event.shiftKey, meta: event.metaKey});
+      event.preventDefault();
+    }
+  });
+  connect();
+})();
+</script>
+</body>
+</html>
