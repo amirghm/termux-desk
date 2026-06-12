@@ -10,40 +10,27 @@ Stream your X11 desktop to any browser. Control mouse, keyboard, and clipboard r
 
 ![TermuxDesk remote desktop in browser](https://raw.githubusercontent.com/amirghm/termux-desk/main/docs/screenshot.jpg)
 
-## One-Line Install & Run
+## Install
+
+### Option 1: One-liner (works everywhere)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/amirghm/termux-desk/main/run.sh | bash
 ```
 
-Works on **Termux**, **PRoot** (Ubuntu/Debian/Arch), and any Linux.
-
-<details>
-<summary>Manual install</summary>
-
-### Termux (native)
+### Option 2: Termux (native)
 
 ```bash
-pkg install python cloudflared
 pip install termux-desk
 termux-desk start --tunnel
 ```
 
-### PRoot (Debian/Ubuntu)
+### Option 3: PRoot (Debian/Ubuntu)
 
 ```bash
 pip install termux-desk --break-system-packages
 termux-desk start --tunnel
 ```
-
-### Any Linux
-
-```bash
-pip install termux-desk --break-system-packages
-termux-desk start --tunnel
-```
-
-</details>
 
 ## Features
 
@@ -79,7 +66,7 @@ export DISPLAY=:0
 
 **`cloudflared was not found`**
 
-The installer auto-downloads it. If it fails:
+Auto-downloaded by termux-desk. If it fails:
 ```bash
 # Termux
 pkg install cloudflared
