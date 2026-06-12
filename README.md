@@ -1,7 +1,7 @@
 # TermuxDesk
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
-[![PyPI](https://img.shields.io/pypi/v/termux-desk.svg)](https://pypi.org/project/termux-desk/)
+[![PyPI](https://img.shields.io/pypi/v/termux-desk.svg?cache=1)](https://pypi.org/project/termux-desk/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **Web-based remote desktop for Android — no root, no VNC, no RDP.**
