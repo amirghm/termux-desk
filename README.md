@@ -74,24 +74,17 @@ termux-desk start --tunnel
 
 ## Quick Start
 
-Start your X11 environment, identify its display, and run:
+One line to install and run:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/amirghm/termux-desk/main/run.sh | bash
+```
+
+Or manually:
+
+```bash
+pip install termux-desk --break-system-packages
 export DISPLAY=:0
-termux-desk start
-```
-
-Open `http://127.0.0.1:8765` in a browser on the same device.
-
-To listen on the LAN:
-
-```bash
-termux-desk start --host 0.0.0.0
-```
-
-To create a temporary HTTPS URL:
-
-```bash
 termux-desk start --tunnel
 ```
 
