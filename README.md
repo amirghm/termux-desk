@@ -29,28 +29,48 @@ desktop environment, or a window manager.
 
 ## Install
 
-From PyPI:
+### Termux (Native)
+
+If you're in the main Termux app (not proot-distro):
 
 ```bash
-python -m pip install termux-desk
+pkg install python cloudflared
+pip install termux-desk
 ```
 
-From a checkout:
+If Pillow fails to build:
 
 ```bash
-python -m pip install .
+pkg install python clang make pkg-config libjpeg-turbo libpng
+pip install termux-desk
 ```
 
-Termux one-liner:
+One-liner:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/amirghm/termux-desk/main/install.sh | bash
 ```
 
-The installer must run in Termux itself, not inside a Debian/Ubuntu PRoot. This
-matters because PRoot's `apt` repositories do not provide Termux's `python`
-package. Run Termux package installation first, then enter your PRoot if that
-is where the X11 session runs.
+### PRoot (Debian/Ubuntu)
+
+If you're inside a proot-distro (Ubuntu, Debian, Arch, etc.):
+
+```bash
+python3 -m venv ~/venv
+source ~/venv/bin/activate
+pip install termux-desk
+```
+
+Then every time you want to run it:
+
+```bash
+source ~/venv/bin/activate
+termux-desk start --tunnel
+```
+
+> **Note:** `cloudflared` must be installed in Termux (not proot). The tunnel
+> command calls `cloudflared` from your system PATH. If it's not found,
+> install it in the Termux shell with `pkg install cloudflared`.
 
 ## Quick Start
 
@@ -148,6 +168,22 @@ display, missing XTest support, and tunnel startup failures.
 
 ## Troubleshooting
 
+**`externally-managed-environment` (PEP 668)**
+
+You're inside a proot-distro. Use a virtual environment:
+
+```bash
+python3 -m venv ~/venv
+source ~/venv/bin/activate
+pip install termux-desk
+```
+
+Or force install (not recommended):
+
+```bash
+pip install termux-desk --break-system-packages
+```
+
 **`DISPLAY is not set`**
 
 Set it to the display used by your X11 session:
@@ -164,7 +200,7 @@ set `DISPLAY`.
 
 **`cloudflared was not found`**
 
-Install it in Termux:
+Install it in the Termux shell (not proot):
 
 ```bash
 pkg install cloudflared
