@@ -461,7 +461,7 @@ class TermuxDeskServer:
         ws = runtime.web.WebSocketResponse(heartbeat=30, max_msg_size=64 * 1024)
         await ws.prepare(request)
 
-        # ── Auth gate ──────────────────────────────────────────
+
         auth_ok = False
         try:
             async for message in ws:
@@ -486,7 +486,7 @@ class TermuxDeskServer:
         if not auth_ok:
             await ws.close()
             return ws
-        # ───────────────────────────────────────────────────────
+
 
         sender = asyncio.create_task(self._stream_frames(ws))
         try:

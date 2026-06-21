@@ -1,5 +1,5 @@
-import termuxdesk
+from termux_desk import TermuxDeskServer
 
-server = termuxdesk.TermuxDeskServer(host="127.0.0.1", port=8765)
+server = TermuxDeskServer(host="127.0.0.1", port=8765)
 print(f"Open {server.local_url}")
 server.run()

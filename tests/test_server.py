@@ -12,7 +12,7 @@ from termux_desk.server import VIEWER_HTML, TermuxDeskError, TermuxDeskServer
 
 class ServerConfigurationTests(unittest.TestCase):
     def test_public_api_imports_without_runtime_dependencies(self):
-        self.assertEqual(termux_desk.__version__, "0.1.2")
+        self.assertEqual(termux_desk.__version__, "0.2.0")
         self.assertIs(termux_desk.TermuxDeskError, TermuxDeskError)
 
     def test_contributor_viewer_matches_embedded_viewer(self):
