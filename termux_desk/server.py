@@ -7,6 +7,8 @@ import contextlib
 import io
 import json
 import os
+import secrets
+import string
 import subprocess
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -63,9 +65,41 @@ VIEWER_HTML = r"""<!doctype html>
       .divider { margin: 0; }
       #fps { display: none; }
     }
+    #auth { position: fixed; inset: 0; display: grid; place-items: center;
+      background: var(--stage); z-index: 10; }
+    #auth[hidden] { display: none; }
+    #auth-box { text-align: center; padding: 2.5rem 3rem; border: 1px solid var(--border);
+      border-radius: 1rem; background: var(--panel); box-shadow: 0 1rem 3rem #000a; min-width: 22rem; }
+    #auth-box h2 { margin: 0 0 .3rem; font-size: 1.4rem; }
+    #auth-box p.sub { margin: 0 0 1.5rem; color: var(--muted); font-size: .9rem; }
+    #authInput { width: 100%; padding: .75rem; font-size: 1.3rem; letter-spacing: .35rem;
+      text-align: center; text-transform: uppercase; border: 1px solid var(--border);
+      border-radius: .5rem; background: #111827; color: var(--text); outline: none;
+      font-family: monospace; }
+    #authInput:focus { border-color: #60a5fa; }
+    #authButton { width: 100%; padding: .75rem; margin-top: .75rem; font-size: 1rem;
+      border: none; border-radius: .5rem; background: #2563eb; color: #fff;
+      cursor: pointer; font-weight: 600; }
+    #authButton:hover { background: #1d4ed8; }
+    #authButton:disabled { opacity: .5; cursor: not-allowed; }
+    #authError { color: #f87171; margin-top: .75rem; font-size: .85rem; }
+    #authError[hidden] { display: none; }
+    #auth-code-hint { display: inline-block; padding: .5rem 1rem; margin-top: 1rem;
+      border: 1px dashed var(--border); border-radius: .4rem; font-family: monospace;
+      font-size: 1.1rem; letter-spacing: .3rem; color: #fbbf24; }
   </style>
 </head>
 <body>
+  <div id="auth">
+    <div id="auth-box">
+      <h2>🔒 TermuxDesk</h2>
+      <p class="sub">Enter the access code to connect</p>
+      <input id="authInput" type="text" maxlength="6" autocomplete="off" autofocus placeholder="A3F8K2">
+      <button id="authButton">Connect</button>
+      <p id="authError" hidden></p>
+      <p class="sub" style="margin-top:1.2rem;font-size:.78rem;">Ask the server operator for the code.</p>
+    </div>
+  </div>
   <header>
     <strong>TermuxDesk</strong>
     <nav class="toolbar" aria-label="Viewer controls">
@@ -100,9 +134,13 @@ VIEWER_HTML = r"""<!doctype html>
   const notice = document.querySelector("#notice");
   const clickButton = document.querySelector("#clickMode");
   const dragButton = document.querySelector("#dragMode");
+  const authOverlay = document.querySelector("#auth");
+  const authInput = document.querySelector("#authInput");
+  const authButton = document.querySelector("#authButton");
+  const authError = document.querySelector("#authError");
   let ws, frameUrl, noticeTimer, lastClick = 0, lastPoint = null;
   let frameCount = 0, fpsStarted = performance.now();
-  let mode = "click", dragging = false, reconnectDelay = 500;
+  let mode = "click", dragging = false, reconnectDelay = 500, authPending = false;
 
   function send(type, data = {}) {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type, ...data}));
@@ -132,12 +170,25 @@ VIEWER_HTML = r"""<!doctype html>
     ws.binaryType = "blob";
     ws.onopen = () => {
       status.style.background = "#22c55e"; status.title = "Connected"; statusText.textContent = "Connected"; reconnectDelay = 500;
+      if (authPending) { authPending = false; return; }
     };
     ws.onmessage = event => {
       if (!(event.data instanceof Blob)) {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === "clipboard") {
+          if (message.type === "auth_ok") {
+            authOverlay.hidden = true;
+            authInput.value = "";
+            authButton.disabled = false;
+            showNotice("Connected");
+          } else if (message.type === "auth_fail") {
+            authError.textContent = message.message || "Invalid code";
+            authError.hidden = false;
+            authButton.disabled = false;
+            authInput.select();
+            ws.close();
+            return;
+          } else if (message.type === "clipboard") {
             navigator.clipboard.writeText(message.text).then(
               () => showNotice("Clipboard copied"),
               () => showNotice("Clipboard received, but browser access was denied")
@@ -160,6 +211,7 @@ VIEWER_HTML = r"""<!doctype html>
     };
     ws.onclose = () => {
       status.style.background = "#ef4444"; status.title = "Disconnected"; statusText.textContent = "Disconnected"; fps.textContent = "0 FPS";
+      if (!authOverlay.hidden) return;
       setTimeout(connect, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 5000);
     };
   }
@@ -230,6 +282,24 @@ VIEWER_HTML = r"""<!doctype html>
       event.preventDefault(); pasteClipboard(text);
     }
   });
+  function doAuth() {
+    const code = authInput.value.trim().toUpperCase();
+    if (code.length !== 6) { authError.textContent = "Code must be 6 characters"; authError.hidden = false; return; }
+    authError.hidden = true;
+    authButton.disabled = true;
+    authPending = true;
+    reconnectDelay = 500;
+    connect();
+    const check = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        clearInterval(check);
+        send("auth", {code});
+      }
+    }, 50);
+    setTimeout(() => clearInterval(check), 5000);
+  }
+  authButton.onclick = doAuth;
+  authInput.addEventListener("keydown", e => { if (e.key === "Enter") doAuth(); });
   connect();
 })();
 </script>
@@ -300,6 +370,9 @@ class TermuxDeskServer:
         self.display_name = display or os.environ.get("DISPLAY")
         self.fps = fps
         self.quality = quality
+        self._auth_code = ''.join(
+            secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6)
+        )
         self._runtime: Optional[_Runtime] = None
         self._runner: Any = None
         self._site: Any = None
@@ -387,6 +460,34 @@ class TermuxDeskServer:
         runtime = self._runtime
         ws = runtime.web.WebSocketResponse(heartbeat=30, max_msg_size=64 * 1024)
         await ws.prepare(request)
+
+        # ── Auth gate ──────────────────────────────────────────
+        auth_ok = False
+        try:
+            async for message in ws:
+                if message.type != runtime.ws_message_type.TEXT:
+                    continue
+                try:
+                    event = json.loads(message.data)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if event.get("type") == "auth" and event.get("code") == self._auth_code:
+                    auth_ok = True
+                    await ws.send_str(json.dumps({"type": "auth_ok"}))
+                    break
+                else:
+                    await ws.send_str(json.dumps({"type": "auth_fail", "message": "Invalid code"}))
+                    await ws.close()
+                    return ws
+        except Exception:
+            await ws.close()
+            return ws
+
+        if not auth_ok:
+            await ws.close()
+            return ws
+        # ───────────────────────────────────────────────────────
+
         sender = asyncio.create_task(self._stream_frames(ws))
         try:
             async for message in ws:

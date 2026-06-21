@@ -45,6 +45,7 @@ async def _start(args: argparse.Namespace) -> None:
             tunnel = CloudflareTunnel(url)
             url = await asyncio.to_thread(tunnel.start)
         print(f"TermuxDesk is running at {url}", flush=True)
+        print(f"Access code: {server._auth_code}", flush=True)
         print("Press Ctrl+C to stop.", flush=True)
         await asyncio.Event().wait()
     finally:

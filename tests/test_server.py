@@ -27,6 +27,16 @@ class ServerConfigurationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             TermuxDeskServer(quality=96)
 
+    def test_auth_code_is_generated(self):
+        server = TermuxDeskServer(display=":0")
+        self.assertEqual(len(server._auth_code), 6)
+        self.assertTrue(server._auth_code.isalnum())
+        self.assertTrue(server._auth_code.isupper())
+
+    def test_auth_codes_are_unique(self):
+        codes = {TermuxDeskServer(display=":0")._auth_code for _ in range(50)}
+        self.assertGreater(len(codes), 1)
+
     def test_start_checks_display_before_importing_dependencies(self):
         with patch.dict(os.environ, {}, clear=True):
             server = TermuxDeskServer(display=None)
