@@ -69,20 +69,21 @@ VIEWER_HTML = r"""<!doctype html>
       background: var(--stage); z-index: 10; }
     #auth[hidden] { display: none; }
     #auth-box { text-align: center; padding: 2.5rem 3rem; border: 1px solid var(--border);
-      border-radius: 1rem; background: var(--panel); box-shadow: 0 1rem 3rem #000a; min-width: 22rem; }
+      border-radius: 1rem; background: var(--panel); box-shadow: 0 1rem 3rem #000a; min-width: 22rem;
+      display: flex; flex-direction: column; align-items: center; }
     #auth-box h2 { margin: 0 0 .3rem; font-size: 1.4rem; }
-    #auth-box p.sub { margin: 0 0 1.5rem; color: var(--muted); font-size: .9rem; }
+    #auth-box p.sub { margin: 0 0 1.5rem; color: var(--muted); font-size: .9rem; text-align: center; width: 100%; }
     #authInput { width: 100%; padding: .75rem; font-size: 1.3rem; letter-spacing: .35rem;
-      text-align: center; text-transform: uppercase; border: 1px solid var(--border);
+      text-align: center !important; text-transform: uppercase; border: 1px solid var(--border);
       border-radius: .5rem; background: #111827; color: var(--text); outline: none;
-      font-family: monospace; }
+      font-family: monospace; direction: ltr; }
     #authInput:focus { border-color: #60a5fa; }
-    #authButton { width: 100%; padding: .75rem; margin-top: .75rem; font-size: 1rem;
+    #authButton { width: 100%; padding: .75rem; margin-top: .75rem; font-size: 1rem; box-sizing: border-box;
       border: none; border-radius: .5rem; background: #2563eb; color: #fff;
       cursor: pointer; font-weight: 600; }
     #authButton:hover { background: #1d4ed8; }
     #authButton:disabled { opacity: .5; cursor: not-allowed; }
-    #authError { color: #f87171; margin-top: .75rem; font-size: .85rem; }
+    #authError { color: #f87171; margin-top: .75rem; font-size: .85rem; text-align: center; }
     #authError[hidden] { display: none; }
     #auth-code-hint { display: inline-block; padding: .5rem 1rem; margin-top: 1rem;
       border: 1px dashed var(--border); border-radius: .4rem; font-family: monospace;
@@ -259,6 +260,8 @@ VIEWER_HTML = r"""<!doctype html>
 
   window.addEventListener("keydown", event => {
     if (!help.hidden && event.key === "Escape") { help.hidden = true; return; }
+    if (!authOverlay.hidden) return;
+    if (event.target.tagName === "INPUT") return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") return;
     if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
       send("char", {char: event.key});
@@ -277,6 +280,7 @@ VIEWER_HTML = r"""<!doctype html>
     }
   });
   document.addEventListener("paste", event => {
+    if (event.target.tagName === "INPUT") return;
     const text = event.clipboardData && event.clipboardData.getData("text");
     if (text !== null && text !== undefined) {
       event.preventDefault(); pasteClipboard(text);
@@ -300,7 +304,6 @@ VIEWER_HTML = r"""<!doctype html>
   }
   authButton.onclick = doAuth;
   authInput.addEventListener("keydown", e => { if (e.key === "Enter") doAuth(); });
-  connect();
 })();
 </script>
 </body>

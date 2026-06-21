@@ -4,27 +4,31 @@
 [![PyPI](https://img.shields.io/pypi/v/termux-desk.svg?cache=1)](https://pypi.org/project/termux-desk/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Web-based remote desktop for Android — no root, no VNC, no RDP.**
+**Your X11 desktop, right in the browser. No root, no VNC, no RDP.**
 
-Stream your X11 desktop to any browser. Control mouse, keyboard, and clipboard remotely. A random access code is required to connect.
+Works on Android (Termux/PRoot) and Linux. Point your browser at the link, enter the access code, and you're in.
 
-![TermuxDesk remote desktop in browser](https://raw.githubusercontent.com/amirghm/termux-desk/main/docs/screenshot.jpg)
+![TermuxDesk terminal banner](https://raw.githubusercontent.com/amirghm/termux-desk/main/docs/terminal-banner.jpg)
+
+![TermuxDesk browser login](https://raw.githubusercontent.com/amirghm/termux-desk/main/docs/browser-login.jpg)
+
+![TermuxDesk browser view](https://raw.githubusercontent.com/amirghm/termux-desk/main/docs/browser-view.jpg)
 
 ## Install
 
-### One-liner (works everywhere)
+One-liner for Termux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/amirghm/termux-desk/main/run.sh | bash
 ```
 
-### PyPI
+Or from PyPI:
 
 ```bash
 pip install termux-desk
 ```
 
-### From source
+Or from source:
 
 ```bash
 git clone https://github.com/amirghm/termux-desk.git
@@ -39,33 +43,37 @@ export DISPLAY=:0
 termux-desk start
 ```
 
-Open `http://127.0.0.1:8765` in a browser. A 6-character access code will be printed in the terminal — enter it in the browser to connect.
+The terminal will print a URL and a 6-character access code. Open the URL in any browser and enter the code when prompted. That's it.
 
-### LAN access
-
-```bash
-termux-desk start --host 0.0.0.0
-```
-
-### HTTPS tunnel
+### With a public link
 
 ```bash
 termux-desk start --tunnel
 ```
 
-### Access code
+This gives you a temporary HTTPS link via localhost.run. Share the link and the access code with whoever needs access.
 
-Each server instance generates a random 6-character code (uppercase letters + digits). The code is printed in the terminal and must be entered in the browser before the remote desktop loads. This prevents unauthorized access when using `--host 0.0.0.0` or `--tunnel`.
+### On your local network
+
+```bash
+termux-desk start --host 0.0.0.0
+```
+
+Other devices on the same network can connect using your IP address.
+
+### About the access code
+
+Every time you start TermuxDesk, it generates a random 6-character code (uppercase letters and digits). You'll see it printed right below the URL in the terminal. Type it into the browser to unlock the remote desktop. This keeps random strangers out when you're using `--tunnel` or `--host 0.0.0.0`.
 
 ## Features
 
-- 🔒 Access code authentication
-- 🖱️ Click, drag, double-click, scroll
-- 📋 Clipboard sync (browser ↔ remote desktop)
-- 🎨 Dark UI with FPS counter & connection status
-- 📱 Works on any device with a browser
-- 🔐 HTTPS via Cloudflare — no exposed ports
-- 🔄 Auto-downloads cloudflared if not installed
+🔒 Access code authentication
+🖱️ Click, drag, double-click, scroll
+📋 Clipboard sync (browser and remote desktop)
+🎨 Dark UI with FPS counter and status
+📱 Works on any device with a browser
+🔐 HTTPS via localhost.run tunnel, no exposed ports
+🔄 Requires ssh (built-in on most systems)
 
 ## CLI
 
@@ -74,16 +82,16 @@ termux-desk start [--host HOST] [--port PORT] [--display DISPLAY]
                   [--fps FPS] [--quality 1..95] [--tunnel]
 ```
 
-| Option | Default | Description |
+| Option | Default | What it does |
 | --- | --- | --- |
-| `--host` | `127.0.0.1` | HTTP listen address |
-| `--port` | `8765` | HTTP listen port |
-| `--display` | `$DISPLAY` | X11 display name |
-| `--fps` | `12` | Maximum capture rate |
-| `--quality` | `70` | JPEG quality (1–95) |
-| `--tunnel` | off | Start Cloudflare Quick Tunnel |
+| `--host` | `127.0.0.1` | Address to listen on |
+| `--port` | `8765` | Port to listen on |
+| `--display` | `$DISPLAY` | X11 display to capture |
+| `--fps` | `12` | Max frames per second |
+| `--quality` | `70` | JPEG quality, 1 to 95 |
+| `--tunnel` | off | Create a localhost.run tunnel |
 
-Use `termux-desk --version` to print the installed version. Press `Ctrl+C` to stop.
+Run `termux-desk --version` to check the installed version. `Ctrl+C` stops everything.
 
 ## Python API
 
@@ -101,38 +109,34 @@ print(f"Access code: {server._auth_code}")
 server.run()
 ```
 
-For an existing asyncio application:
+If you already have an asyncio loop running:
 
 ```python
 server = TermuxDeskServer()
 await server.start()
 print(server.local_url)
-# ... application work ...
+# ... your app logic ...
 await server.stop()
 ```
 
-`termux_desk.run_server(**options)` is a blocking convenience function.
-`TermuxDeskError` is raised for missing dependencies, an unset or unreachable display, missing XTest support, and tunnel startup failures.
+There's also `termux_desk.run_server(**options)` for quick blocking use.
 
 ## Troubleshooting
 
 **`DISPLAY is not set`**
+
 ```bash
 export DISPLAY=:0
 ```
 
-**`cloudflared was not found`**
+**`tunnel fails to connect`**
 
-Auto-downloaded by termux-desk. If it fails:
+The tunnel uses SSH to connect to localhost.run. Make sure `ssh` is available:
+
 ```bash
-# Termux
-pkg install cloudflared
-
-# Linux
-curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-chmod +x /usr/local/bin/cloudflared
+which ssh
 ```
 
 ## License
 
-[MIT](LICENSE) © 2026 TermuxDesk contributors.
+[MIT](LICENSE) 2026 TermuxDesk contributors.

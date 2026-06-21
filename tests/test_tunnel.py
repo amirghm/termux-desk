@@ -1,14 +1,16 @@
 import unittest
 
-from termux_desk.tunnel import _TUNNEL_URL
+from termux_desk.tunnel import LocalhostRunTunnel
 
 
 class TunnelTests(unittest.TestCase):
-    def test_quick_tunnel_url_is_extracted_from_cloudflared_output(self):
-        line = "INF +-------------------------------- https://demo-name.trycloudflare.com"
-        match = _TUNNEL_URL.search(line)
+    def test_localhost_run_url_is_extracted(self):
+        line = "296cd66f6b8ea2.lhr.life tunneled with tls termination, https://296cd66f6b8ea2.lhr.life"
+        tunnel = LocalhostRunTunnel(8765)
+        import re
+        match = re.search(r"(https://[^\s]+\.lhr\.life[^\s]*)", line)
         self.assertIsNotNone(match)
-        self.assertEqual(match.group(0), "https://demo-name.trycloudflare.com")
+        self.assertEqual(match.group(1), "https://296cd66f6b8ea2.lhr.life")
 
 
 if __name__ == "__main__":
